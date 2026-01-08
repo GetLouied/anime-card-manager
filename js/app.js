@@ -360,13 +360,13 @@ function renderTable() {
         row.innerHTML = `
             <td>${card.name}</td>
             <td>${card.element}</td>
-            <td>${card.hairColor}</td>
-            <td>${card.type}</td>
+            <td>${card.talents}</td>
             <td>${styleStat(card.hp)}</td>
             <td>${styleStat(card.atk)}</td>
             <td>${styleStat(card.def)}</td>
             <td>${styleStat(card.spd)}</td>
-            <td>${card.talents}</td>
+            <td>${card.type}</td>
+            <td>${card.hairColor}</td>
             <td>${card.notes}</td>
             <td>
                 <button class="edit-btn" onclick="openEditModal(${cards.indexOf(card)})">Edit</button>
