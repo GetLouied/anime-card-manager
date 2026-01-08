@@ -1,7 +1,7 @@
 // Main application logic
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-import { firebaseConfig } from './firebase-config.js';
+import firebaseConfig from './firebase-config.js';
 import { defaultCards } from './data.js';
 
 // Initialize Firebase
