@@ -18,10 +18,14 @@ let filters = {
     search: ''
 };
 let editingIndex = -1;
+let sortState = {
+    column: null,
+    direction: 'asc' // 'asc' or 'desc'
+};
 
 const roundDescriptions = {
     '7': 'Round 7: Only Dark, Neutral and Light elemental cards',
-    '9': 'Round 9: Only Brown and White hair colors',
+    '9': 'Round 9: Only hair colors containing "Brown" or "White"',
     '10': 'Round 10: At least 1 Neutral elemental card must be used',
     '12': 'Round 12: Only Human cards allowed',
     '5': 'Round 5: Cards with stats above 100 or below 60 are banned'
@@ -44,6 +48,7 @@ async function loadCards() {
             
             populateFilterButtons();
             renderTable();
+            initializeSorting(); // Initialize sorting after table is rendered
         } else {
             console.log('No cards found, initializing with default data...');
             await initializeDefaultCards();
@@ -62,6 +67,7 @@ window.initializeDefaultCards = async function() {
             cards = [...defaultCards];
             populateFilterButtons();
             renderTable();
+            initializeSorting(); // Initialize sorting after default cards loaded
             alert('Default cards loaded successfully!');
         } catch (error) {
             console.error('Error initializing cards:', error);
@@ -108,11 +114,20 @@ function populateFilterButtons() {
         elementContainer.appendChild(btn);
     });
 
-    // Only show Brown and White hair colors
-    const hairColors = [...new Set(cards.map(c => c.hairColor))]
-        .filter(h => h && (h.toLowerCase().includes('brown') || h.toLowerCase().includes('white')))
-        .filter(h => !h.toLowerCase().includes('blonde'))
-        .sort();
+    // Show only "Brown" and "White" filter buttons
+    // But Round 9 will still match any hair color containing these words
+    const allHairColors = [...new Set(cards.map(c => c.hairColor))]
+        .filter(h => h && (h.toLowerCase().includes('brown') || h.toLowerCase().includes('white')));
+    
+    // Only show "Brown" and "White" as filter options
+    const hairColors = [];
+    if (allHairColors.some(h => h.toLowerCase().includes('brown'))) {
+        hairColors.push('Brown');
+    }
+    if (allHairColors.some(h => h.toLowerCase().includes('white'))) {
+        hairColors.push('White');
+    }
+    
     const hairContainer = document.getElementById('hairColorFilters');
     hairContainer.innerHTML = '';
     hairColors.forEach(color => {
@@ -204,27 +219,14 @@ function removeRoundFilter(round) {
             });
             break;
         case '9':
-            const brownWhiteColors = [...new Set(cards
-                .filter(c => {
-                    const color = c.hairColor.toLowerCase();
-                    return color === 'brown' || color === 'white' || 
-                           color.includes('brown') && !color.includes('blonde') ||
-                           color.includes('white') && !color.includes('blue');
-                })
-                .map(c => c.hairColor))];
-            
-            brownWhiteColors.forEach(color => {
-                const idx = filters.hairColor.indexOf(color);
-                if (idx > -1) filters.hairColor.splice(idx, 1);
-            });
+            // Remove "Brown" and "White" from filters
+            const idx9Brown = filters.hairColor.indexOf('Brown');
+            if (idx9Brown > -1) filters.hairColor.splice(idx9Brown, 1);
+            const idx9White = filters.hairColor.indexOf('White');
+            if (idx9White > -1) filters.hairColor.splice(idx9White, 1);
             
             document.querySelectorAll('.filter-btn[data-filter-type="hairColor"]').forEach(btn => {
-                const val = btn.getAttribute('data-filter-value').toLowerCase();
-                if ((val === 'brown' || val === 'white' || 
-                     val.includes('brown') && !val.includes('blonde') ||
-                     val.includes('white') && !val.includes('blue'))) {
-                    btn.classList.remove('active');
-                }
+                btn.classList.remove('active');
             });
             break;
         case '10':
@@ -258,28 +260,16 @@ function applyRoundFilter(round) {
             });
             break;
         case '9':
-            const brownWhiteColors = [...new Set(cards
-                .filter(c => {
-                    const color = c.hairColor.toLowerCase();
-                    return color === 'brown' || color === 'white' ||
-                           color.includes('brown') && !color.includes('blonde') ||
-                           color.includes('white') && !color.includes('blue');
-                })
-                .map(c => c.hairColor))];
-            
-            brownWhiteColors.forEach(color => {
-                if (!filters.hairColor.includes(color)) {
-                    filters.hairColor.push(color);
-                }
-            });
+            // Add "Brown" and "White" to filters
+            if (!filters.hairColor.includes('Brown')) {
+                filters.hairColor.push('Brown');
+            }
+            if (!filters.hairColor.includes('White')) {
+                filters.hairColor.push('White');
+            }
             
             document.querySelectorAll('.filter-btn[data-filter-type="hairColor"]').forEach(btn => {
-                const val = btn.getAttribute('data-filter-value').toLowerCase();
-                if ((val === 'brown' || val === 'white' ||
-                     val.includes('brown') && !val.includes('blonde') ||
-                     val.includes('white') && !val.includes('blue'))) {
-                    btn.classList.add('active');
-                }
+                btn.classList.add('active');
             });
             break;
         case '10':
@@ -323,8 +313,14 @@ function renderTable() {
             pass = false;
         }
 
-        if (filters.hairColor.length > 0 && !filters.hairColor.includes(card.hairColor)) {
-            pass = false;
+        if (filters.hairColor.length > 0) {
+            // Check if hair color contains any of the selected filters
+            const matchesHairFilter = filters.hairColor.some(filter => {
+                return card.hairColor.toLowerCase().includes(filter.toLowerCase());
+            });
+            if (!matchesHairFilter) {
+                pass = false;
+            }
         }
 
         if (filters.search && !card.name.toLowerCase().includes(filters.search)) {
@@ -345,6 +341,11 @@ function renderTable() {
 
         return pass;
     });
+
+    // Apply sorting if active
+    if (sortState.column) {
+        filteredData = sortData(filteredData, sortState.column, sortState.direction);
+    }
 
     filteredData.forEach((card) => {
         const row = document.createElement('tr');
@@ -375,6 +376,71 @@ function renderTable() {
     });
 
     updateStats(filteredData.length);
+    updateSortIndicators();
+}
+
+function sortData(data, column, direction) {
+    const sorted = [...data].sort((a, b) => {
+        let aVal = a[column];
+        let bVal = b[column];
+        
+        // Handle numeric columns
+        if (['hp', 'atk', 'def', 'spd'].includes(column)) {
+            aVal = parseInt(aVal) || 0;
+            bVal = parseInt(bVal) || 0;
+            return direction === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        
+        // Handle text columns
+        aVal = (aVal || '').toString().toLowerCase();
+        bVal = (bVal || '').toString().toLowerCase();
+        
+        if (direction === 'asc') {
+            return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else {
+            return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        }
+    });
+    
+    return sorted;
+}
+
+function updateSortIndicators() {
+    // Remove all active classes
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('active', 'desc');
+    });
+    
+    // Add active class to current sort column
+    if (sortState.column) {
+        const th = document.querySelector(`th[data-sort="${sortState.column}"]`);
+        if (th) {
+            th.classList.add('active');
+            if (sortState.direction === 'desc') {
+                th.classList.add('desc');
+            }
+        }
+    }
+}
+
+// Add click handlers for sortable headers
+function initializeSorting() {
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', function() {
+            const column = this.getAttribute('data-sort');
+            
+            // If clicking same column, toggle direction
+            if (sortState.column === column) {
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New column, default to ascending
+                sortState.column = column;
+                sortState.direction = 'asc';
+            }
+            
+            renderTable();
+        });
+    });
 }
 
 function updateStats(filtered = null) {
