@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime Card Manager - Firebase</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎴 Anime Card Manager</h1>
+            <p>Manage and filter your character cards with real-time sync</p>
+            <div id="firebaseStatus" class="firebase-status disconnected">⚠️ Connecting to Firebase...</div>
+        </header>
+
+        <div class="controls">
+            <div class="filter-section">
+                <h3>🔍 Search</h3>
+                <input type="text" class="search-box" id="searchBox" placeholder="Search by name...">
+            </div>
+
+            <div class="filter-section">
+                <h3>⚡ Filter by Element</h3>
+                <div class="filter-group" id="elementFilters"></div>
+            </div>
+
+            <div class="filter-section">
+                <h3>👤 Filter by Type</h3>
+                <div class="filter-group">
+                    <button class="filter-btn" data-filter-type="human" data-filter-value="Human">Human</button>
+                    <button class="filter-btn" data-filter-type="human" data-filter-value="Non-Human">Non-Human</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>💇 Filter by Hair Color</h3>
+                <div class="filter-group" id="hairColorFilters"></div>
+            </div>
+
+            <div class="filter-section">
+                <h3>🎯 Quick Round Filters</h3>
+                <div class="filter-group">
+                    <button class="round-btn" data-round="7">Round 7</button>
+                    <button class="round-btn" data-round="9">Round 9</button>
+                    <button class="round-btn" data-round="10">Round 10</button>
+                    <button class="round-btn" data-round="12">Round 12</button>
+                    <button class="round-btn" data-round="5">Round 5</button>
+                </div>
+                <div id="roundDescription" class="round-description"></div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="openAddModal()">➕ Add Card</button>
+                <button class="btn btn-secondary" onclick="exportToJSON()">📥 Export JSON</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📤 Import JSON</button>
+                <button class="btn btn-secondary" onclick="exportToCSV()">📊 Export CSV</button>
+                <button class="btn btn-danger" onclick="clearFilters()">🔄 Clear Filters</button>
+                <button class="btn btn-secondary" onclick="initializeDefaultCards()">🔄 Reset to Default Cards</button>
+            </div>
+            <input type="file" id="importFile" accept=".json" onchange="importFromJSON(event)">
+        </div>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="number" id="totalCards">0</div>
+                <div class="label">Total Cards</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="filteredCards">0</div>
+                <div class="label">Showing</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="humanCards">0</div>
+                <div class="label">Human Cards</div>
+            </div>
+            <div class="stat-box">
+                <div class="number" id="nonHumanCards">0</div>
+                <div class="label">Non-Human Cards</div>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading">Loading cards from database...</div>
+
+        <div class="table-container" id="tableContainer" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Element</th>
+                        <th>Hair</th>
+                        <th>Type</th>
+                        <th>HP</th>
+                        <th>ATK</th>
+                        <th>DEF</th>
+                        <th>SPD</th>
+                        <th>Talents</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="cardTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal for Add/Edit -->
+    <div id="cardModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Add Card</h2>
+            <form id="cardForm">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" id="cardName" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Element *</label>
+                        <select id="cardElement" required>
+                            <option value="">Select Element</option>
+                            <option value="Dark">Dark</option>
+                            <option value="Light">Light</option>
+                            <option value="Neutral">Neutral</option>
+                            <option value="Water">Water</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Type *</label>
+                        <select id="cardType" required>
+                            <option value="">Select Type</option>
+                            <option value="Human">Human</option>
+                            <option value="Non-Human">Non-Human</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Hair Color</label>
+                    <input type="text" id="cardHair" placeholder="e.g., Brown, White, Black">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>HP (60-100)</label>
+                        <input type="number" id="cardHP" min="1" max="150" placeholder="60-100">
+                    </div>
+                    <div class="form-group">
+                        <label>ATK (60-100)</label>
+                        <input type="number" id="cardATK" min="1" max="150" placeholder="60-100">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>DEF (60-100)</label>
+                        <input type="number" id="cardDEF" min="1" max="150" placeholder="60-100">
+                    </div>
+                    <div class="form-group">
+                        <label>SPD (60-100)</label>
+                        <input type="number" id="cardSPD" min="1" max="150" placeholder="60-100">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Talents</label>
+                    <textarea id="cardTalents" placeholder="List talents separated by commas"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <input type="text" id="cardNotes" placeholder="e.g., ?">
+                </div>
+                <button type="submit" class="btn btn-primary">Save Card</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Load JavaScript modules -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
