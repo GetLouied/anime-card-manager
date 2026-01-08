@@ -369,7 +369,6 @@ function renderTable() {
             <td>${card.notes}</td>
             <td>
                 <button class="edit-btn" onclick="openEditModal(${cards.indexOf(card)})">Edit</button>
-                <button class="delete-btn" onclick="deleteCard(${cards.indexOf(card)})">Delete</button>
             </td>
         `;
         tbody.appendChild(row);
@@ -393,6 +392,7 @@ window.openAddModal = function() {
     editingIndex = -1;
     document.getElementById('modalTitle').textContent = 'Add Card';
     document.getElementById('cardForm').reset();
+    document.getElementById('deleteBtn').style.display = 'none'; // Hide delete button
     document.getElementById('cardModal').style.display = 'block';
 };
 
@@ -410,6 +410,7 @@ window.openEditModal = function(index) {
     document.getElementById('cardSPD').value = card.spd;
     document.getElementById('cardTalents').value = card.talents;
     document.getElementById('cardNotes').value = card.notes;
+    document.getElementById('deleteBtn').style.display = 'block'; // Show delete button
     document.getElementById('cardModal').style.display = 'block';
 };
 
@@ -449,12 +450,16 @@ document.getElementById('cardForm').addEventListener('submit', async function(e)
     closeModal();
 });
 
-window.deleteCard = async function(index) {
-    if (confirm('Are you sure you want to delete this card?')) {
-        cards.splice(index, 1);
+window.deleteCurrentCard = async function() {
+    if (editingIndex === -1) return; // Safety check
+    
+    const cardName = cards[editingIndex].name;
+    if (confirm(`Are you sure you want to delete "${cardName}"? This cannot be undone.`)) {
+        cards.splice(editingIndex, 1);
         await saveCardsToFirebase();
         populateFilterButtons();
         renderTable();
+        closeModal();
     }
 };
 
