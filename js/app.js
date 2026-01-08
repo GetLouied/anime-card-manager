@@ -174,16 +174,42 @@ window.clearFilters = function() {
 // ROUND FILTER FUNCTIONS
 // ========================================
 
+// Define round order for cumulative application
+const roundOrder = ['5', '7', '9', '10', '12'];
+
 document.querySelectorAll('.round-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         const round = this.getAttribute('data-round');
+        const roundIndex = roundOrder.indexOf(round);
         
         if (this.classList.contains('active')) {
+            // If unchecking, remove this round and all later rounds
             this.classList.remove('active');
             removeRoundFilter(round);
+            
+            // Remove all later rounds
+            for (let i = roundIndex + 1; i < roundOrder.length; i++) {
+                const laterRound = roundOrder[i];
+                const laterBtn = document.querySelector(`.round-btn[data-round="${laterRound}"]`);
+                if (laterBtn && laterBtn.classList.contains('active')) {
+                    laterBtn.classList.remove('active');
+                    removeRoundFilter(laterRound);
+                }
+            }
         } else {
+            // If checking, apply this round and all previous rounds
             this.classList.add('active');
             applyRoundFilter(round);
+            
+            // Apply all previous rounds
+            for (let i = 0; i < roundIndex; i++) {
+                const previousRound = roundOrder[i];
+                const previousBtn = document.querySelector(`.round-btn[data-round="${previousRound}"]`);
+                if (previousBtn && !previousBtn.classList.contains('active')) {
+                    previousBtn.classList.add('active');
+                    applyRoundFilter(previousRound);
+                }
+            }
         }
         
         updateRoundDescription();
