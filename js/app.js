@@ -80,6 +80,34 @@ window.initializeDefaultCards = async function() {
     }
 };
 
+window.refreshFromFirebase = async function() {
+    try {
+        console.log('🔄 Refreshing data from Firebase...');
+        const snapshot = await get(cardsRef);
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            cards = Array.isArray(data) ? data : Object.values(data);
+            
+            populateFilterButtons();
+            renderTable();
+            
+            // Show refresh notification
+            const notification = document.createElement('div');
+            notification.textContent = `✅ Refreshed! Loaded ${cards.length} cards`;
+            notification.style.cssText = 'position:fixed;top:20px;right:20px;background:#17a2b8;color:white;padding:15px 25px;border-radius:8px;z-index:10000;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 2000);
+            
+            console.log('✅ Data refreshed successfully');
+        } else {
+            alert('No data found in Firebase');
+        }
+    } catch (error) {
+        console.error('Error refreshing:', error);
+        alert('Error refreshing data: ' + error.message);
+    }
+};
+
 function updateFirebaseStatus(connected) {
     const statusEl = document.getElementById('firebaseStatus');
     if (connected) {
@@ -106,6 +134,38 @@ async function saveCardsToFirebase() {
     } catch (error) {
         console.error('Error saving to Firebase:', error);
         alert('Error saving to database: ' + error.message);
+    }
+}
+
+// Save a single card by index - prevents overwriting other users' changes
+async function saveIndividualCard(index, card) {
+    try {
+        const cardRef = ref(database, `cards/${index}`);
+        await set(cardRef, card);
+        console.log(`✅ Card ${index} (${card.name}) saved individually`);
+        
+        // Show save confirmation
+        const saveNotification = document.createElement('div');
+        saveNotification.textContent = `✅ ${card.name} saved!`;
+        saveNotification.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 25px;border-radius:8px;z-index:10000;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+        document.body.appendChild(saveNotification);
+        setTimeout(() => saveNotification.remove(), 2000);
+        
+    } catch (error) {
+        console.error('Error saving card:', error);
+        alert('Error saving card: ' + error.message);
+    }
+}
+
+// Delete a single card by index
+async function deleteIndividualCard(index) {
+    try {
+        const cardRef = ref(database, `cards/${index}`);
+        await set(cardRef, null); // Setting to null deletes it
+        console.log(`✅ Card ${index} deleted`);
+    } catch (error) {
+        console.error('Error deleting card:', error);
+        alert('Error deleting card: ' + error.message);
     }
 }
 
@@ -599,12 +659,16 @@ document.getElementById('cardForm').addEventListener('submit', async function(e)
     };
 
     if (editingIndex === -1) {
+        // Adding new card - add to end of array
         cards.push(card);
+        const newIndex = cards.length - 1;
+        await saveIndividualCard(newIndex, card);
     } else {
+        // Editing existing card - update only this card
         cards[editingIndex] = card;
+        await saveIndividualCard(editingIndex, card);
     }
 
-    await saveCardsToFirebase();
     populateFilterButtons();
     renderTable();
     closeModal();
@@ -615,11 +679,18 @@ window.deleteCurrentCard = async function() {
     
     const cardName = cards[editingIndex].name;
     if (confirm(`Are you sure you want to delete "${cardName}"?`)) {
+        // Remove from local array
         cards.splice(editingIndex, 1);
+        
+        // Resave entire array to maintain proper indexing
+        // (deleting creates gaps, so we need to rebuild the array)
         await saveCardsToFirebase();
+        
         populateFilterButtons();
         renderTable();
         closeModal();
+        
+        alert(`✅ ${cardName} deleted successfully`);
     }
 };
 
