@@ -1,6 +1,6 @@
 // Main application logic
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 import firebaseConfig from './firebase-config.js';
 import { defaultCards } from './data.js';
 
@@ -8,6 +8,42 @@ import { defaultCards } from './data.js';
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const cardsRef = ref(database, 'cards');
+
+// Track if this is the initial load
+let isInitialLoad = true;
+
+// Set up real-time listener to detect changes from other users
+onValue(cardsRef, (snapshot) => {
+    if (isInitialLoad) {
+        // Skip the initial load
+        isInitialLoad = false;
+        return;
+    }
+    
+    if (snapshot.exists()) {
+        const data = snapshot.val();
+        const newCards = Array.isArray(data) ? data : Object.values(data);
+        
+        // Check if data actually changed
+        if (JSON.stringify(newCards) !== JSON.stringify(cards)) {
+            const shouldReload = confirm(
+                '⚠️ SOMEONE ELSE UPDATED THE DATABASE!\n\n' +
+                'Another user just saved changes.\n\n' +
+                'Click OK to reload and see their changes.\n' +
+                'Click Cancel to keep working (but your next save may overwrite their changes).'
+            );
+            
+            if (shouldReload) {
+                cards = newCards;
+                populateFilterButtons();
+                renderTable();
+                alert('✅ Data reloaded with latest changes from other user.');
+            } else {
+                alert('⚠️ WARNING: You are now working on an OLD version. Your next save will overwrite the other user\'s changes!');
+            }
+        }
+    }
+});
 
 // Global state
 let cards = [];
@@ -91,8 +127,23 @@ function updateFirebaseStatus(connected) {
 
 async function saveCardsToFirebase() {
     try {
+        // Create a timestamped backup before saving
+        const timestamp = new Date().toISOString();
+        const backupRef = ref(database, `backups/${timestamp}`);
+        await set(backupRef, cards);
+        
+        // Save to main cards reference
         await set(cardsRef, cards);
-        console.log('Cards saved to Firebase');
+        
+        console.log('Cards saved to Firebase with backup at:', timestamp);
+        
+        // Show save confirmation
+        const saveNotification = document.createElement('div');
+        saveNotification.textContent = '✅ Saved successfully!';
+        saveNotification.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 25px;border-radius:8px;z-index:10000;font-weight:600;';
+        document.body.appendChild(saveNotification);
+        setTimeout(() => saveNotification.remove(), 3000);
+        
     } catch (error) {
         console.error('Error saving to Firebase:', error);
         alert('Error saving to database: ' + error.message);
@@ -116,8 +167,44 @@ function populateFilterButtons() {
         elementContainer.appendChild(btn);
     });
 
-    // Add event listeners to all filter buttons
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+    // Add event listeners to newly created element buttons only
+    elementContainer.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const type = this.getAttribute('data-filter-type');
+            const value = this.getAttribute('data-filter-value');
+            toggleFilter(type, value);
+            this.classList.toggle('active');
+            renderTable();
+        });
+    });
+}
+
+// Initialize static filter button listeners once on page load
+function initializeStaticFilters() {
+    // Hair Color filters
+    document.querySelectorAll('.filter-btn[data-filter-type="hairColor"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const type = this.getAttribute('data-filter-type');
+            const value = this.getAttribute('data-filter-value');
+            toggleFilter(type, value);
+            this.classList.toggle('active');
+            renderTable();
+        });
+    });
+
+    // Human/Non-Human filters
+    document.querySelectorAll('.filter-btn[data-filter-type="human"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const type = this.getAttribute('data-filter-type');
+            const value = this.getAttribute('data-filter-value');
+            toggleFilter(type, value);
+            this.classList.toggle('active');
+            renderTable();
+        });
+    });
+
+    // Talent Type filters
+    document.querySelectorAll('.filter-btn[data-filter-type="talentType"]').forEach(btn => {
         btn.addEventListener('click', function() {
             const type = this.getAttribute('data-filter-type');
             const value = this.getAttribute('data-filter-value');
@@ -642,6 +729,43 @@ window.exportToCSV = function() {
     link.click();
 };
 
+window.viewBackups = async function() {
+    try {
+        const backupsRef = ref(database, 'backups');
+        const snapshot = await get(backupsRef);
+        
+        if (!snapshot.exists()) {
+            alert('No backups found yet. Backups are created automatically every time you save.');
+            return;
+        }
+        
+        const backups = snapshot.val();
+        const backupList = Object.keys(backups).sort().reverse(); // Most recent first
+        
+        let message = '📋 AVAILABLE BACKUPS (Most Recent First):\n\n';
+        message += 'Showing last 10 backups:\n\n';
+        
+        backupList.slice(0, 10).forEach((timestamp, index) => {
+            const date = new Date(timestamp);
+            message += `${index + 1}. ${date.toLocaleString()}\n`;
+        });
+        
+        message += '\n💾 Total backups: ' + backupList.length;
+        message += '\n\n⚠️ To restore a backup:\n';
+        message += '1. Go to Firebase Console\n';
+        message += '2. Navigate to Database > backups\n';
+        message += '3. Copy the backup data\n';
+        message += '4. Paste into Database > cards\n';
+        message += '\nOR use Export/Import JSON for manual backup control.';
+        
+        alert(message);
+        
+    } catch (error) {
+        console.error('Error viewing backups:', error);
+        alert('Error accessing backups: ' + error.message);
+    }
+};
+
 // ========================================
 // SEARCH FUNCTIONALITY
 // ========================================
@@ -673,4 +797,8 @@ document.getElementById('bannedTalentsBox').addEventListener('input', function(e
 // INITIALIZE APP
 // ========================================
 
+// Initialize static filter buttons once
+initializeStaticFilters();
+
+// Load cards from Firebase
 loadCards();
