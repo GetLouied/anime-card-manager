@@ -1,6 +1,6 @@
 // Main application logic
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 import firebaseConfig from './firebase-config.js';
 import { defaultCards } from './data.js';
 
@@ -50,59 +50,29 @@ async function loadCards() {
             
             populateFilterButtons();
             renderTable();
-            initializeSorting(); // Initialize sorting after table is rendered
-            
-            // NOW set up real-time listener (after initial load)
-            setupRealtimeListener();
+            initializeSorting();
         } else {
-            console.log('No cards found, initializing with default data...');
-            await initializeDefaultCards();
+            console.log('No cards found in Firebase');
+            updateFirebaseStatus(true);
+            document.getElementById('loadingIndicator').style.display = 'none';
+            alert('No data found in Firebase. Click "Reset to Default Cards" to load 649 cards.');
         }
     } catch (error) {
         console.error('Error loading cards:', error);
         updateFirebaseStatus(false);
-        alert('Error connecting to Firebase. Please check your configuration in firebase-config.js');
+        alert('Error connecting to Firebase. Please check your configuration.');
     }
 }
 
-// Set up real-time listener to detect changes from other users
-function setupRealtimeListener() {
-    onValue(cardsRef, (snapshot) => {
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            const newCards = Array.isArray(data) ? data : Object.values(data);
-            
-            // Check if data actually changed
-            if (JSON.stringify(newCards) !== JSON.stringify(cards)) {
-                const shouldReload = confirm(
-                    '⚠️ SOMEONE ELSE UPDATED THE DATABASE!\n\n' +
-                    'Another user just saved changes.\n\n' +
-                    'Click OK to reload and see their changes.\n' +
-                    'Click Cancel to keep working (but your next save may overwrite their changes).'
-                );
-                
-                if (shouldReload) {
-                    cards = newCards;
-                    populateFilterButtons();
-                    renderTable();
-                    alert('✅ Data reloaded with latest changes from other user.');
-                } else {
-                    alert('⚠️ WARNING: You are now working on an OLD version. Your next save will overwrite the other user\'s changes!');
-                }
-            }
-        }
-    });
-}
-
 window.initializeDefaultCards = async function() {
-    if (confirm('This will reset all cards to default 100 cards. Continue?')) {
+    if (confirm('This will reset all cards to default 649 cards with talentType field. Continue?')) {
         try {
             await set(cardsRef, defaultCards);
             cards = [...defaultCards];
             populateFilterButtons();
             renderTable();
-            initializeSorting(); // Initialize sorting after default cards loaded
-            alert('Default cards loaded successfully!');
+            initializeSorting();
+            alert(`✅ Success! Loaded ${defaultCards.length} default cards with talentType field.`);
         } catch (error) {
             console.error('Error initializing cards:', error);
             alert('Error: ' + error.message);
@@ -123,22 +93,15 @@ function updateFirebaseStatus(connected) {
 
 async function saveCardsToFirebase() {
     try {
-        // Create a timestamped backup before saving
-        const timestamp = new Date().toISOString();
-        const backupRef = ref(database, `backups/${timestamp}`);
-        await set(backupRef, cards);
-        
-        // Save to main cards reference
         await set(cardsRef, cards);
-        
-        console.log('Cards saved to Firebase with backup at:', timestamp);
+        console.log('✅ Cards saved to Firebase');
         
         // Show save confirmation
         const saveNotification = document.createElement('div');
-        saveNotification.textContent = '✅ Saved successfully!';
-        saveNotification.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 25px;border-radius:8px;z-index:10000;font-weight:600;';
+        saveNotification.textContent = '✅ Saved!';
+        saveNotification.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 25px;border-radius:8px;z-index:10000;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
         document.body.appendChild(saveNotification);
-        setTimeout(() => saveNotification.remove(), 3000);
+        setTimeout(() => saveNotification.remove(), 2000);
         
     } catch (error) {
         console.error('Error saving to Firebase:', error);
@@ -527,7 +490,7 @@ function sortData(data, column, direction) {
         if (direction === 'asc') {
             return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
         } else {
-            return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
         }
     });
     
@@ -587,7 +550,7 @@ window.openAddModal = function() {
     editingIndex = -1;
     document.getElementById('modalTitle').textContent = 'Add Card';
     document.getElementById('cardForm').reset();
-    document.getElementById('deleteBtn').style.display = 'none'; // Hide delete button
+    document.getElementById('deleteBtn').style.display = 'none';
     document.getElementById('cardModal').style.display = 'block';
 };
 
@@ -606,7 +569,7 @@ window.openEditModal = function(index) {
     document.getElementById('cardTalents').value = card.talents;
     document.getElementById('cardTalentType').value = card.talentType || '';
     document.getElementById('cardNotes').value = card.notes;
-    document.getElementById('deleteBtn').style.display = 'block'; // Show delete button
+    document.getElementById('deleteBtn').style.display = 'block';
     document.getElementById('cardModal').style.display = 'block';
 };
 
@@ -648,10 +611,10 @@ document.getElementById('cardForm').addEventListener('submit', async function(e)
 });
 
 window.deleteCurrentCard = async function() {
-    if (editingIndex === -1) return; // Safety check
+    if (editingIndex === -1) return;
     
     const cardName = cards[editingIndex].name;
-    if (confirm(`Are you sure you want to delete "${cardName}"? This cannot be undone.`)) {
+    if (confirm(`Are you sure you want to delete "${cardName}"?`)) {
         cards.splice(editingIndex, 1);
         await saveCardsToFirebase();
         populateFilterButtons();
@@ -665,28 +628,30 @@ window.deleteCurrentCard = async function() {
 // ========================================
 
 window.exportToJSON = function() {
-    const dataStr = JSON.stringify(cards, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    const url = URL.createObjectURL(dataBlob);
+    const json = JSON.stringify(cards, null, 2);
+    const blob = new Blob([json], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'anime-cards-' + new Date().toISOString().split('T')[0] + '.json';
     link.click();
 };
 
-window.importFromJSON = async function(event) {
+window.importFromJSON = function(event) {
     const file = event.target.files[0];
     if (file) {
         const reader = new FileReader();
         reader.onload = async function(e) {
             try {
                 const imported = JSON.parse(e.target.result);
-                if (confirm(`Import ${imported.length} cards? This will replace your current data.`)) {
-                    cards = imported;
-                    await saveCardsToFirebase();
-                    populateFilterButtons();
-                    renderTable();
-                    alert('Import successful!');
+                if (Array.isArray(imported)) {
+                    if (confirm(`Import ${imported.length} cards? This will replace current data.`)) {
+                        cards = imported;
+                        await saveCardsToFirebase();
+                        populateFilterButtons();
+                        renderTable();
+                        alert('Import successful!');
+                    }
                 }
             } catch (error) {
                 alert('Error importing file: ' + error.message);
@@ -697,18 +662,18 @@ window.importFromJSON = async function(event) {
 };
 
 window.exportToCSV = function() {
-    const headers = ['Name', 'Element', 'Hair Color', 'Type', 'HP', 'ATK', 'DEF', 'SPD', 'Talents', 'Talent Type', 'Notes'];
+    const headers = ['Name', 'Element', 'Talent', 'HP', 'ATK', 'DEF', 'Speed', 'Talent Type', 'Type', 'Hair', 'Notes'];
     const rows = cards.map(card => [
         card.name,
         card.element,
-        card.hairColor,
-        card.type,
+        card.talents,
         card.hp,
         card.atk,
         card.def,
         card.spd,
-        card.talents,
         card.talentType || '',
+        card.type,
+        card.hairColor,
         card.notes
     ]);
 
@@ -725,43 +690,6 @@ window.exportToCSV = function() {
     link.click();
 };
 
-window.viewBackups = async function() {
-    try {
-        const backupsRef = ref(database, 'backups');
-        const snapshot = await get(backupsRef);
-        
-        if (!snapshot.exists()) {
-            alert('No backups found yet. Backups are created automatically every time you save.');
-            return;
-        }
-        
-        const backups = snapshot.val();
-        const backupList = Object.keys(backups).sort().reverse(); // Most recent first
-        
-        let message = '📋 AVAILABLE BACKUPS (Most Recent First):\n\n';
-        message += 'Showing last 10 backups:\n\n';
-        
-        backupList.slice(0, 10).forEach((timestamp, index) => {
-            const date = new Date(timestamp);
-            message += `${index + 1}. ${date.toLocaleString()}\n`;
-        });
-        
-        message += '\n💾 Total backups: ' + backupList.length;
-        message += '\n\n⚠️ To restore a backup:\n';
-        message += '1. Go to Firebase Console\n';
-        message += '2. Navigate to Database > backups\n';
-        message += '3. Copy the backup data\n';
-        message += '4. Paste into Database > cards\n';
-        message += '\nOR use Export/Import JSON for manual backup control.';
-        
-        alert(message);
-        
-    } catch (error) {
-        console.error('Error viewing backups:', error);
-        alert('Error accessing backups: ' + error.message);
-    }
-};
-
 // ========================================
 // SEARCH FUNCTIONALITY
 // ========================================
@@ -774,10 +702,8 @@ document.getElementById('searchBox').addEventListener('input', function(e) {
 document.getElementById('bannedTalentsBox').addEventListener('input', function(e) {
     const input = e.target.value;
     if (input.trim()) {
-        // Split by comma and clean up
         filters.bannedTalents = input.split(',').map(t => t.trim()).filter(t => t);
         
-        // Display banned talents as tags
         const listEl = document.getElementById('bannedTalentsList');
         listEl.innerHTML = filters.bannedTalents.map(talent => 
             `<span class="banned-talent-tag">${talent}</span>`
