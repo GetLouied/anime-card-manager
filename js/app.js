@@ -9,42 +9,6 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const cardsRef = ref(database, 'cards');
 
-// Track if this is the initial load
-let isInitialLoad = true;
-
-// Set up real-time listener to detect changes from other users
-onValue(cardsRef, (snapshot) => {
-    if (isInitialLoad) {
-        // Skip the initial load
-        isInitialLoad = false;
-        return;
-    }
-    
-    if (snapshot.exists()) {
-        const data = snapshot.val();
-        const newCards = Array.isArray(data) ? data : Object.values(data);
-        
-        // Check if data actually changed
-        if (JSON.stringify(newCards) !== JSON.stringify(cards)) {
-            const shouldReload = confirm(
-                '⚠️ SOMEONE ELSE UPDATED THE DATABASE!\n\n' +
-                'Another user just saved changes.\n\n' +
-                'Click OK to reload and see their changes.\n' +
-                'Click Cancel to keep working (but your next save may overwrite their changes).'
-            );
-            
-            if (shouldReload) {
-                cards = newCards;
-                populateFilterButtons();
-                renderTable();
-                alert('✅ Data reloaded with latest changes from other user.');
-            } else {
-                alert('⚠️ WARNING: You are now working on an OLD version. Your next save will overwrite the other user\'s changes!');
-            }
-        }
-    }
-});
-
 // Global state
 let cards = [];
 let filters = {
@@ -87,6 +51,9 @@ async function loadCards() {
             populateFilterButtons();
             renderTable();
             initializeSorting(); // Initialize sorting after table is rendered
+            
+            // NOW set up real-time listener (after initial load)
+            setupRealtimeListener();
         } else {
             console.log('No cards found, initializing with default data...');
             await initializeDefaultCards();
@@ -96,6 +63,35 @@ async function loadCards() {
         updateFirebaseStatus(false);
         alert('Error connecting to Firebase. Please check your configuration in firebase-config.js');
     }
+}
+
+// Set up real-time listener to detect changes from other users
+function setupRealtimeListener() {
+    onValue(cardsRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const newCards = Array.isArray(data) ? data : Object.values(data);
+            
+            // Check if data actually changed
+            if (JSON.stringify(newCards) !== JSON.stringify(cards)) {
+                const shouldReload = confirm(
+                    '⚠️ SOMEONE ELSE UPDATED THE DATABASE!\n\n' +
+                    'Another user just saved changes.\n\n' +
+                    'Click OK to reload and see their changes.\n' +
+                    'Click Cancel to keep working (but your next save may overwrite their changes).'
+                );
+                
+                if (shouldReload) {
+                    cards = newCards;
+                    populateFilterButtons();
+                    renderTable();
+                    alert('✅ Data reloaded with latest changes from other user.');
+                } else {
+                    alert('⚠️ WARNING: You are now working on an OLD version. Your next save will overwrite the other user\'s changes!');
+                }
+            }
+        }
+    });
 }
 
 window.initializeDefaultCards = async function() {
