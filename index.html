@@ -35,7 +35,28 @@
 
             <div class="filter-section">
                 <h3>💇 Filter by Hair Color</h3>
-                <div class="filter-group" id="hairColorFilters"></div>
+                <p style="font-size: 0.9em; color: #888; margin-bottom: 10px;">Exact filters match only pure colors, (Any) matches if color is present</p>
+                <div class="filter-group">
+                    <button class="filter-btn" data-filter-type="hairColor" data-filter-value="White-exact">White</button>
+                    <button class="filter-btn" data-filter-type="hairColor" data-filter-value="Brown-exact">Brown</button>
+                    <button class="filter-btn" data-filter-type="hairColor" data-filter-value="White-any">White (Any)</button>
+                    <button class="filter-btn" data-filter-type="hairColor" data-filter-value="Brown-any">Brown (Any)</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>⚡ Filter by Talent Type</h3>
+                <div class="filter-group">
+                    <button class="filter-btn" data-filter-type="talentType" data-filter-value="Passive">Passive</button>
+                    <button class="filter-btn" data-filter-type="talentType" data-filter-value="Active">Active</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>🚫 Banned Talents</h3>
+                <p style="font-size: 0.9em; color: #888; margin-bottom: 10px;">Enter talent names to exclude (comma-separated)</p>
+                <input type="text" class="search-box" id="bannedTalentsBox" placeholder="e.g., Teleportation, Mind Control">
+                <div id="bannedTalentsList" class="banned-talents-list"></div>
             </div>
 
             <div class="filter-section">
@@ -94,6 +115,7 @@
                         <th class="sortable" data-sort="atk">ATK <span class="sort-arrow"></span></th>
                         <th class="sortable" data-sort="def">DEF <span class="sort-arrow"></span></th>
                         <th class="sortable" data-sort="spd">Speed <span class="sort-arrow"></span></th>
+                        <th class="sortable" data-sort="talentType">Talent Type <span class="sort-arrow"></span></th>
                         <th class="sortable" data-sort="type">Type <span class="sort-arrow"></span></th>
                         <th class="sortable" data-sort="hairColor">Hair <span class="sort-arrow"></span></th>
                         <th class="sortable" data-sort="notes">Notes <span class="sort-arrow"></span></th>
@@ -167,6 +189,15 @@
                 <div class="form-group">
                     <label>Talent</label>
                     <textarea id="cardTalents" placeholder="Enter talent"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Talent Type</label>
+                    <select id="cardTalentType">
+                        <option value="">None</option>
+                        <option value="Passive">Passive</option>
+                        <option value="Active">Active</option>
+                    </select>
                 </div>
 
                 <div class="form-group">

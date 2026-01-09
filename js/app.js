@@ -15,6 +15,8 @@ let filters = {
     element: [],
     human: [],
     hairColor: [],
+    talentType: [],
+    bannedTalents: [],
     search: ''
 };
 let editingIndex = -1;
@@ -114,32 +116,7 @@ function populateFilterButtons() {
         elementContainer.appendChild(btn);
     });
 
-    // Show only "Brown" and "White" filter buttons
-    // But Round 9 will still match any hair color containing these words
-    const allHairColors = [...new Set(cards.map(c => c.hairColor))]
-        .filter(h => h && (h.toLowerCase().includes('brown') || h.toLowerCase().includes('white')));
-    
-    // Only show "Brown" and "White" as filter options
-    const hairColors = [];
-    if (allHairColors.some(h => h.toLowerCase().includes('brown'))) {
-        hairColors.push('Brown');
-    }
-    if (allHairColors.some(h => h.toLowerCase().includes('white'))) {
-        hairColors.push('White');
-    }
-    
-    const hairContainer = document.getElementById('hairColorFilters');
-    hairContainer.innerHTML = '';
-    hairColors.forEach(color => {
-        const btn = document.createElement('button');
-        btn.className = 'filter-btn';
-        btn.setAttribute('data-filter-type', 'hairColor');
-        btn.setAttribute('data-filter-value', color);
-        btn.textContent = color;
-        hairContainer.appendChild(btn);
-    });
-
-    // Add event listeners
+    // Add event listeners to all filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const type = this.getAttribute('data-filter-type');
@@ -161,10 +138,12 @@ function toggleFilter(type, value) {
 }
 
 window.clearFilters = function() {
-    filters = {element: [], human: [], hairColor: [], search: ''};
+    filters = {element: [], human: [], hairColor: [], talentType: [], bannedTalents: [], search: ''};
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.round-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById('searchBox').value = '';
+    document.getElementById('bannedTalentsBox').value = '';
+    document.getElementById('bannedTalentsList').innerHTML = '';
     document.getElementById('roundDescription').classList.remove('active');
     document.getElementById('roundDescription').textContent = '';
     renderTable();
@@ -245,14 +224,17 @@ function removeRoundFilter(round) {
             });
             break;
         case '9':
-            // Remove "Brown" and "White" from filters
-            const idx9Brown = filters.hairColor.indexOf('Brown');
+            // Remove "Brown-any" and "White-any" from filters
+            const idx9Brown = filters.hairColor.indexOf('Brown-any');
             if (idx9Brown > -1) filters.hairColor.splice(idx9Brown, 1);
-            const idx9White = filters.hairColor.indexOf('White');
+            const idx9White = filters.hairColor.indexOf('White-any');
             if (idx9White > -1) filters.hairColor.splice(idx9White, 1);
             
             document.querySelectorAll('.filter-btn[data-filter-type="hairColor"]').forEach(btn => {
-                btn.classList.remove('active');
+                const value = btn.getAttribute('data-filter-value');
+                if (value === 'Brown-any' || value === 'White-any') {
+                    btn.classList.remove('active');
+                }
             });
             break;
         case '10':
@@ -286,16 +268,19 @@ function applyRoundFilter(round) {
             });
             break;
         case '9':
-            // Add "Brown" and "White" to filters
-            if (!filters.hairColor.includes('Brown')) {
-                filters.hairColor.push('Brown');
+            // Round 9: Hair colors containing "Brown" or "White" - use -any filters
+            if (!filters.hairColor.includes('Brown-any')) {
+                filters.hairColor.push('Brown-any');
             }
-            if (!filters.hairColor.includes('White')) {
-                filters.hairColor.push('White');
+            if (!filters.hairColor.includes('White-any')) {
+                filters.hairColor.push('White-any');
             }
             
             document.querySelectorAll('.filter-btn[data-filter-type="hairColor"]').forEach(btn => {
-                btn.classList.add('active');
+                const value = btn.getAttribute('data-filter-value');
+                if (value === 'Brown-any' || value === 'White-any') {
+                    btn.classList.add('active');
+                }
             });
             break;
         case '10':
@@ -340,9 +325,20 @@ function renderTable() {
         }
 
         if (filters.hairColor.length > 0) {
-            // Check if hair color contains any of the selected filters
+            // Check if hair color matches any of the selected filters
             const matchesHairFilter = filters.hairColor.some(filter => {
-                return card.hairColor.toLowerCase().includes(filter.toLowerCase());
+                if (filter.endsWith('-exact')) {
+                    // Exact match: hair color must be exactly "White" or "Brown" (no other colors)
+                    const color = filter.replace('-exact', '');
+                    return card.hairColor.toLowerCase().trim() === color.toLowerCase();
+                } else if (filter.endsWith('-any')) {
+                    // Contains match: hair color can contain the color anywhere
+                    const color = filter.replace('-any', '');
+                    return card.hairColor.toLowerCase().includes(color.toLowerCase());
+                } else {
+                    // Fallback for legacy filters
+                    return card.hairColor.toLowerCase().includes(filter.toLowerCase());
+                }
             });
             if (!matchesHairFilter) {
                 pass = false;
@@ -351,6 +347,22 @@ function renderTable() {
 
         if (filters.search && !card.name.toLowerCase().includes(filters.search)) {
             pass = false;
+        }
+
+        // Talent Type filter
+        if (filters.talentType.length > 0 && !filters.talentType.includes(card.talentType)) {
+            pass = false;
+        }
+
+        // Banned Talents filter
+        if (filters.bannedTalents.length > 0 && card.talents) {
+            const cardTalentLower = card.talents.toLowerCase().trim();
+            const isBanned = filters.bannedTalents.some(bannedTalent => {
+                return cardTalentLower.includes(bannedTalent.toLowerCase().trim());
+            });
+            if (isBanned) {
+                pass = false;
+            }
         }
 
         // Round 5 filter
@@ -383,6 +395,13 @@ function renderTable() {
             return `<span class="stat-cell stat-good">${val}</span>`;
         };
         
+        const styleTalentType = (type) => {
+            if (!type) return '';
+            if (type === 'Passive') return `<span class="badge badge-passive">Passive</span>`;
+            if (type === 'Active') return `<span class="badge badge-active">Active</span>`;
+            return type;
+        };
+        
         row.innerHTML = `
             <td>${card.name}</td>
             <td>${card.element}</td>
@@ -391,6 +410,7 @@ function renderTable() {
             <td>${styleStat(card.atk)}</td>
             <td>${styleStat(card.def)}</td>
             <td>${styleStat(card.spd)}</td>
+            <td>${styleTalentType(card.talentType)}</td>
             <td>${card.type}</td>
             <td>${card.hairColor}</td>
             <td>${card.notes}</td>
@@ -501,6 +521,7 @@ window.openEditModal = function(index) {
     document.getElementById('cardDEF').value = card.def;
     document.getElementById('cardSPD').value = card.spd;
     document.getElementById('cardTalents').value = card.talents;
+    document.getElementById('cardTalentType').value = card.talentType || '';
     document.getElementById('cardNotes').value = card.notes;
     document.getElementById('deleteBtn').style.display = 'block'; // Show delete button
     document.getElementById('cardModal').style.display = 'block';
@@ -527,6 +548,7 @@ document.getElementById('cardForm').addEventListener('submit', async function(e)
         def: document.getElementById('cardDEF').value || '0',
         spd: document.getElementById('cardSPD').value || '0',
         talents: document.getElementById('cardTalents').value,
+        talentType: document.getElementById('cardTalentType').value,
         notes: document.getElementById('cardNotes').value
     };
 
@@ -592,7 +614,7 @@ window.importFromJSON = async function(event) {
 };
 
 window.exportToCSV = function() {
-    const headers = ['Name', 'Element', 'Hair Color', 'Type', 'HP', 'ATK', 'DEF', 'SPD', 'Talents', 'Notes'];
+    const headers = ['Name', 'Element', 'Hair Color', 'Type', 'HP', 'ATK', 'DEF', 'SPD', 'Talents', 'Talent Type', 'Notes'];
     const rows = cards.map(card => [
         card.name,
         card.element,
@@ -603,6 +625,7 @@ window.exportToCSV = function() {
         card.def,
         card.spd,
         card.talents,
+        card.talentType || '',
         card.notes
     ]);
 
@@ -625,6 +648,24 @@ window.exportToCSV = function() {
 
 document.getElementById('searchBox').addEventListener('input', function(e) {
     filters.search = e.target.value.toLowerCase();
+    renderTable();
+});
+
+document.getElementById('bannedTalentsBox').addEventListener('input', function(e) {
+    const input = e.target.value;
+    if (input.trim()) {
+        // Split by comma and clean up
+        filters.bannedTalents = input.split(',').map(t => t.trim()).filter(t => t);
+        
+        // Display banned talents as tags
+        const listEl = document.getElementById('bannedTalentsList');
+        listEl.innerHTML = filters.bannedTalents.map(talent => 
+            `<span class="banned-talent-tag">${talent}</span>`
+        ).join('');
+    } else {
+        filters.bannedTalents = [];
+        document.getElementById('bannedTalentsList').innerHTML = '';
+    }
     renderTable();
 });
 

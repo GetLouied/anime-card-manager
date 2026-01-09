@@ -376,3 +376,43 @@ input[type="file"] {
         grid-template-columns: 1fr;
     }
 }
+
+/* Talent Type Badges */
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-passive {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.badge-active {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+/* Banned Talents List */
+.banned-talents-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 30px;
+}
+
+.banned-talent-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
+    color: white;
+    border-radius: 15px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
